@@ -2,7 +2,7 @@
 
 **Project:** Predict median house value (California Housing) with a linear/regression model and show how to embed the trained model into C for microcontrollers.
 
-**Language:** Python 3.9+ (training) and C (inference stub)  
+**Language:** Python (training) and C (inference stub)  
 **Libraries:** scikit-learn, pandas, numpy, joblib
 
 ## What you get
