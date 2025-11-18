@@ -1,0 +1,64 @@
+"""
+test_embedded_consistency.py
+
+- Loads the saved scikit-learn pipeline
+- Loads embedded_model.json
+- Picks a random sample (or several) and checks:
+    pipeline.predict(X) ~= manual_predict_using_json(X)
+- Runs several random samples and asserts they match to float32 precision.
+"""
+
+import json
+import numpy as np
+import joblib
+from pathlib import Path
+from sklearn.datasets import fetch_california_housing
+
+OUTPUT_DIR = Path("output")
+PIPELINE_PATH = OUTPUT_DIR / "reg_pipeline.joblib"
+JSON_PATH = OUTPUT_DIR / "embedded_model.json"
+
+def manual_predict(x: np.ndarray, embedded: dict) -> np.ndarray:
+    """
+    x: shape (n_samples, n_features) numpy float64
+    embedded: dict with 'scaler' and 'coefficients' and 'intercept'
+    Returns predictions as numpy float64
+    """
+    mean = np.array(embedded["scaler"]["mean"], dtype=np.float64)
+    scale = np.array(embedded["scaler"]["scale"], dtype=np.float64)
+    coef = np.array(embedded["coefficients"], dtype=np.float64)
+    intercept = float(embedded["intercept"])
+
+    # Standardize (same as StandardScaler.transform)
+    x_scaled = (x - mean) / scale
+    preds = x_scaled.dot(coef) + intercept
+    return preds
+
+def run_tests(n_checks: int = 20, rtol=1e-5, atol=1e-5):
+    # Load pipeline and embedded json
+    pipeline = joblib.load(PIPELINE_PATH)
+    with open(JSON_PATH, "r") as f:
+        embedded = json.load(f)
+
+    # Load dataset (same features order)
+    dataset = fetch_california_housing(as_frame=True)
+    X = dataset.frame[embedded["feature_names"]].to_numpy(dtype=np.float64)
+
+    rng = np.random.default_rng(0)
+    idxs = rng.integers(0, X.shape[0], size=n_checks)
+
+    for i, idx in enumerate(idxs, 1):
+        x = X[idx:idx+1]  # shape (1, n_features)
+        p_pipeline = pipeline.predict(x)
+        p_manual = manual_predict(x, embedded)
+        # compare with tolerances; we expect equality up to float32 rounding if you
+        # later run embedded inference in float32
+        if not np.allclose(p_pipeline, p_manual, rtol=rtol, atol=atol):
+            print("Mismatch on sample", idx)
+            print("pipeline:", p_pipeline)
+            print("manual:", p_manual)
+            raise AssertionError("Embedded model mismatch!")
+    print(f"All {n_checks} checks passed (rtol={rtol}, atol={atol}).")
+
+if __name__ == "__main__":
+    run_tests()
