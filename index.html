@@ -4,164 +4,283 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>House Price Regression — Embedded Inference Demo</title>
+    <title>House Price Regression — Live Embedded Inference</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
     <header class="site-header">
         <div class="container">
-            <h1>House Price Regression — Embedded Inference</h1>
-            <p class="tagline">Train a Ridge regression on California Housing and export coefficients to run inference
-                in pure C (microcontroller-friendly).</p>
+            <h1>House Price Regression — Live Embedded Inference</h1>
+            <p class="tagline">Enter features, run the same scaled dot-product inference that your C code would run —
+                directly in your browser.</p>
         </div>
     </header>
 
     <main class="container">
         <section class="card">
-            <h2>Project Snapshot</h2>
+            <h2>Model Loader</h2>
+            <p>This page attempts to load <code>embedded_model.json</code> automatically. If it can't find the file,
+                paste the JSON into the box below and click <em>Load JSON</em>.</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button id="reloadBtn" class="btn">Reload model (embedded_model.json)</button>
+                <button id="clearModelBtn" class="btn">Clear model</button>
+            </div>
+
+            <textarea id="jsonPaste" placeholder='Paste embedded_model.json here (optional)...'
+                style="width:100%;height:120px;margin-top:12px;padding:10px;border-radius:8px;"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button id="loadJsonBtn" class="btn">Load JSON</button>
+                <div id="modelStatus" style="align-self:center;color:var(--muted)">No model loaded</div>
+            </div>
+        </section>
+
+        <section class="card" id="inferenceCard" style="display:none;">
+            <h2>Run Inference</h2>
+            <p id="modelSummary" class="muted"></p>
+
+            <form id="featuresForm" onsubmit="return false;">
+                <div id="featureInputs"
+                    style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;"></div>
+
+                <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                    <button id="predictBtn" class="btn">Predict</button>
+                    <button id="exampleBtn" class="btn">Fill example values</button>
+                    <button id="resetBtn" class="btn">Reset</button>
+                </div>
+            </form>
+
+            <div style="margin-top:16px;">
+                <h3>Prediction</h3>
+                <div id="predictionBox" class="code" style="font-size:1.05rem;">— no prediction yet —</div>
+            </div>
+
+            <div style="margin-top:14px;">
+                <h3>Export C arrays</h3>
+                <p class="muted">Convenience: generate <code>const float</code> arrays to paste into your C source.</p>
+                <button id="genCBtn" class="btn">Generate C arrays</button>
+                <pre id="cExport" class="code" style="display:none;margin-top:8px;"></pre>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>What this does</h2>
             <ul>
-                <li><strong>Training language:</strong> Python (scikit-learn, pandas, numpy, joblib)</li>
-                <li><strong>Embedded inference:</strong> C (pure float ops)</li>
-                <li><strong>Artifacts created:</strong> <code>reg_pipeline.joblib</code>,
-                    <code>embedded_model.json</code></li>
-            </ul>
-        </section>
-
-        <section class="card two-columns">
-            <div>
-                <h2>How to run (training)</h2>
-                <ol>
-                    <li>Create virtualenv:
-                        <pre class="code"><code>python -m venv venv
-source venv/bin/activate    # macOS / Linux
-venv\Scripts\activate       # Windows</code></pre>
-                    </li>
-                    <li>Install dependencies:
-                        <pre class="code"><code>pip install -r requirements.txt</code></pre>
-                    </li>
-                    <li>Run training:
-                        <pre class="code"><code>python main_regression_embedded.py</code></pre>
-                    </li>
-                </ol>
-                <p>Training script saves both a Python pipeline (<code>reg_pipeline.joblib</code>) and an
-                    embedded-friendly JSON with scale parameters and model coefficients
-                    (<code>embedded_model.json</code>).</p>
-            </div>
-
-            <div>
-                <h2>Download / Local files</h2>
-                <p>Place the generated artifacts in the same directory as this HTML to enable the links below.</p>
-                <ul class="artifact-list">
-                    <li><a href="./reg_pipeline.joblib" download>reg_pipeline.joblib</a> — Python pipeline (scaler +
-                        model)</li>
-                    <li><a href="./embedded_model.json" download>embedded_model.json</a> — coefficients, intercept,
-                        scaler params</li>
-                    <li><a href="./main_regression_embedded.py" download>main_regression_embedded.py</a> — training
-                        script</li>
-                </ul>
-
-                <h3>Quick model summary</h3>
-                <p>This demo uses a <strong>Ridge</strong> regression (linear model with L2 regularization). Because
-                    coefficients are small and fixed-length, embedding them into C is straightforward and efficient for
-                    microcontrollers.</p>
-            </div>
-        </section>
-
-        <section class="card">
-            <h2>Embedded C inference (snippet)</h2>
-            <p>Drop this C function into your microcontroller code (use <code>float</code> arithmetic). It expects a
-                feature vector scaled the same way as the training scaler — the JSON contains mean &amp; scale params to
-                implement the scaling step.</p>
-            <pre class="code"><code>// embedded_inference.c - minimal float-only inference
-#include &lt;stddef.h&gt;
-
-float predict_house_value(const float features[], size_t n,
-                          const float scaler_mean[], const float scaler_scale[],
-                          const float coef[], float intercept) {
-    // scale features in-place (non-destructive version)
-    float s;
-    float acc = 0.0f;
-    for (size_t i = 0; i &lt; n; ++i) {
-        // standard scaler: (x - mean) / scale
-        float scaled = (features[i] - scaler_mean[i]) / scaler_scale[i];
-        acc += scaled * coef[i];
-    }
-    acc += intercept;
-    return acc; // predicted median house value (same units used in training)
-}
-
-/* Example usage:
-   float features[8] = { /* your 8 features in same order as training * / };
-   float value = predict_house_value(features, 8, mean_arr, scale_arr, coef_arr, intercept);
-*/
-</code></pre>
-            <p class="muted">Note: copy the arrays <code>mean_arr</code>, <code>scale_arr</code>, and
-                <code>coef_arr</code> from <code>embedded_model.json</code> into your C source as
-                <code>const float</code> arrays.</p>
-        </section>
-
-        <section class="card grid-3">
-            <div>
-                <h3>Data Structures</h3>
-                <ul>
-                    <li><strong>Python (training):</strong> <code>numpy.ndarray</code>, <code>pandas.DataFrame</code>,
-                        <code>dict</code> (for JSON export)</li>
-                    <li><strong>Embedded (inference):</strong> C arrays (<code>float[]</code>) for coefficients, means,
-                        scales</li>
-                    <li><strong>On-disk:</strong> joblib file (Python pipeline), JSON file (coeffs + scaler)</li>
-                </ul>
-            </div>
-
-            <div>
-                <h3>Time Complexity</h3>
-                <ul>
-                    <li><strong>Training</strong>: Ridge fitting — typically <em>O(n_features^2 · n_samples)</em> using
-                        dense linear algebra for closed-form / solver-based solution (scikit-learn optimizes this).</li>
-                    <li><strong>Prediction (Python)</strong>: O(n_features) per sample (dot product).</li>
-                    <li><strong>Prediction (C / embedded)</strong>: O(n_features) per inference (simple loop of
-                        multiplies/adds).</li>
-                </ul>
-            </div>
-
-            <div>
-                <h3>Why this is useful</h3>
-                <p>Linear models (Ridge) are compact and deterministic. They export easily to coefficients + intercept
-                    and require only a scaled dot product for inference — ideal when you need low-latency, predictable
-                    inference on tiny devices.</p>
-            </div>
-        </section>
-
-        <section class="card">
-            <h2>Example: embedded_model.json format</h2>
-            <p>JSON contains arrays you can paste into your C file as <code>const float</code> arrays.</p>
-            <pre class="code"><code>{
-  "feature_names": ["MedInc","HouseAge","AveRooms","AveBedrms","Population","AveOccup","Latitude","Longitude"],
-  "mean": [3.87, 28.6, 5.4, 1.1, 1425.5, 3.0, 35.63, -119.57],
-  "scale": [1.9, 12.6, 2.2, 0.3, 2600.2, 2.3, 2.14, 2.14],
-  "coefficients": [0.67, -0.03, 0.01, -0.02, 0.0001, -0.004, -0.5, 0.4],
-  "intercept": 2.37
-}</code></pre>
-            <p class="muted">(Values above are illustrative — your training run will produce the real numbers.)</p>
-        </section>
-
-        <section class="card">
-            <h2>Tips & gotchas</h2>
-            <ul>
-                <li>Make sure feature ordering in the C arrays matches the training pipeline exactly.</li>
-                <li>If your MCU has limited <code>float</code> precision, test the prediction against Python with a set
-                    of sample inputs.</li>
-                <li>Some devices lack hardware FP; consider using 16.16 fixed-point if needed (requires scaling integers
-                    instead of floats).</li>
+                <li>Loads model JSON containing: <code>feature_names</code>, <code>mean</code>, <code>scale</code>,
+                    <code>coefficients</code>, <code>intercept</code>.</li>
+                <li>Scales each input with <code>(x - mean) / scale</code>, computes dot product with coefficients, then
+                    adds intercept.</li>
+                <li>Outputs the predicted median house value (same units as training).</li>
             </ul>
         </section>
 
         <footer class="card footer">
-            <p>Want the HTML extended to run a small in-browser scaler + inference using JavaScript? Or a downloadable
-                zip with the artifacts and example feature files? Tell me which and I’ll add it.</p>
-            <p class="small">© House Price Regression — Embedded Inference demo</p>
+            <p class="small">If you want, I can also add client-side input validation rules per-feature (ranges), or a
+                sample CSV uploader to run batched predictions in-browser. Which would you like?</p>
         </footer>
     </main>
+
+    <script>
+        /*
+          Client-side embedded inference widget.
+          - Attempts to fetch ./embedded_model.json
+          - If succeeded, builds feature inputs
+          - If not, user can paste JSON then click "Load JSON"
+          - Prediction uses: scaled = (x - mean) / scale (if scale == 0 -> scaled = 0)
+        */
+
+        let model = null;
+
+        const modelStatus = document.getElementById('modelStatus');
+        const reloadBtn = document.getElementById('reloadBtn');
+        const loadJsonBtn = document.getElementById('loadJsonBtn');
+        const clearModelBtn = document.getElementById('clearModelBtn');
+        const jsonPaste = document.getElementById('jsonPaste');
+        const inferenceCard = document.getElementById('inferenceCard');
+        const modelSummary = document.getElementById('modelSummary');
+        const featureInputsDiv = document.getElementById('featureInputs');
+        const predictBtn = document.getElementById('predictBtn');
+        const predictionBox = document.getElementById('predictionBox');
+        const genCBtn = document.getElementById('genCBtn');
+        const cExport = document.getElementById('cExport');
+        const exampleBtn = document.getElementById('exampleBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        async function tryLoadModel() {
+            modelStatus.textContent = 'Loading model...';
+            try {
+                const resp = await fetch('./embedded_model.json', { cache: "no-store" });
+                if (!resp.ok) throw new Error('Not found');
+                const j = await resp.json();
+                loadModelFromJSON(j);
+            } catch (e) {
+                model = null;
+                modelStatus.textContent = 'No model found. Paste JSON below and click "Load JSON".';
+                inferenceCard.style.display = 'none';
+            }
+        }
+
+        function loadModelFromJSON(j) {
+            // basic validation
+            const keys = ['feature_names', 'mean', 'scale', 'coefficients', 'intercept'];
+            for (const k of keys) {
+                if (!(k in j)) {
+                    modelStatus.textContent = `Invalid model JSON: missing ${k}`;
+                    model = null;
+                    inferenceCard.style.display = 'none';
+                    return;
+                }
+            }
+            // normalize arrays to floats
+            model = {
+                feature_names: j.feature_names,
+                mean: j.mean.map(Number),
+                scale: j.scale.map(Number),
+                coefficients: j.coefficients.map(Number),
+                intercept: Number(j.intercept)
+            };
+            // lengths must match
+            const n = model.feature_names.length;
+            if (![model.mean.length, model.scale.length, model.coefficients.length].every(x => x === n)) {
+                modelStatus.textContent = 'Invalid model JSON: array lengths mismatch';
+                model = null;
+                inferenceCard.style.display = 'none';
+                return;
+            }
+            modelStatus.textContent = `Model loaded: ${n} features.`;
+            buildFeatureInputs();
+            inferenceCard.style.display = '';
+            modelSummary.textContent = `Features: ${model.feature_names.join(', ')}`;
+            predictionBox.textContent = '— no prediction yet —';
+            cExport.style.display = 'none';
+        }
+
+        function buildFeatureInputs() {
+            featureInputsDiv.innerHTML = '';
+            model.feature_names.forEach((fname, idx) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.display = 'flex';
+                wrapper.style.flexDirection = 'column';
+
+                const label = document.createElement('label');
+                label.style.fontWeight = '600';
+                label.style.marginBottom = '6px';
+                label.textContent = fname;
+
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.step = 'any';
+                input.dataset.idx = idx;
+                input.placeholder = `mean: ${model.mean[idx]}  scale: ${model.scale[idx]}`;
+                input.style.padding = '8px';
+                input.style.borderRadius = '6px';
+                input.style.border = '1px solid rgba(255,255,255,0.06)';
+                input.onkeydown = (e) => { if (e.key === 'Enter') { doPredict(); } };
+
+                wrapper.appendChild(label);
+                wrapper.appendChild(input);
+                featureInputsDiv.appendChild(wrapper);
+            });
+        }
+
+        function readFeatureValues() {
+            const inputs = featureInputsDiv.querySelectorAll('input');
+            const vals = [];
+            for (const inp of inputs) {
+                const v = inp.value.trim();
+                if (v === '') {
+                    // treat empty as mean (reasonable fallback)
+                    vals.push(model.mean[Number(inp.dataset.idx)]);
+                } else {
+                    const n = Number(v);
+                    if (Number.isNaN(n)) throw new Error(`Invalid number for feature index ${inp.dataset.idx}`);
+                    vals.push(n);
+                }
+            }
+            return vals;
+        }
+
+        function doPredict() {
+            try {
+                if (!model) { predictionBox.textContent = 'No model loaded.'; return; }
+                const raw = readFeatureValues();
+                const n = raw.length;
+                let acc = 0.0;
+                for (let i = 0; i < n; ++i) {
+                    const mean = model.mean[i];
+                    const scale = model.scale[i] === 0 ? 1.0 : model.scale[i]; // avoid div0
+                    const scaled = (raw[i] - mean) / scale;
+                    acc += scaled * model.coefficients[i];
+                }
+                acc += model.intercept;
+                // pretty formatting
+                predictionBox.textContent = `Predicted median house value: ${acc.toFixed(4)} (same units as training)`;
+            } catch (e) {
+                predictionBox.textContent = `Error: ${e.message}`;
+            }
+        }
+
+        function genCArrays() {
+            if (!model) return;
+            const n = model.feature_names.length;
+            let out = '// Paste into C as const float arrays\n';
+            out += `const float feature_mean[${n}] = { ${model.mean.map(x => x.toFixed(8)).join(', ')} };\n`;
+            out += `const float feature_scale[${n}] = { ${model.scale.map(x => x.toFixed(8)).join(', ')} };\n`;
+            out += `const float coefficients[${n}] = { ${model.coefficients.map(x => x.toFixed(8)).join(', ')} };\n`;
+            out += `const float intercept = ${model.intercept.toFixed(8)}f;\n\n`;
+            out += '/* Example inference function (C):\nfloat predict(const float features[], size_t n) { ... } */\n';
+            cExport.textContent = out;
+            cExport.style.display = '';
+            cExport.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        reloadBtn.addEventListener('click', tryLoadModel);
+        loadJsonBtn.addEventListener('click', () => {
+            const txt = jsonPaste.value.trim();
+            if (!txt) {
+                modelStatus.textContent = 'Paste JSON first.';
+                return;
+            }
+            try {
+                const j = JSON.parse(txt);
+                loadModelFromJSON(j);
+            } catch (e) {
+                modelStatus.textContent = 'Invalid JSON: ' + e.message;
+            }
+        });
+        clearModelBtn.addEventListener('click', () => {
+            model = null;
+            inferenceCard.style.display = 'none';
+            modelStatus.textContent = 'Model cleared. Paste JSON or reload file.';
+            featureInputsDiv.innerHTML = '';
+            predictionBox.textContent = '— no prediction yet —';
+            cExport.style.display = 'none';
+        });
+
+        predictBtn.addEventListener('click', doPredict);
+        genCBtn.addEventListener('click', genCArrays);
+
+        exampleBtn.addEventListener('click', () => {
+            if (!model) return;
+            const inputs = featureInputsDiv.querySelectorAll('input');
+            inputs.forEach((inp, idx) => {
+                // fill with mean as example
+                inp.value = model.mean[idx];
+            });
+        });
+
+        resetBtn.addEventListener('click', () => {
+            if (!model) return;
+            const inputs = featureInputsDiv.querySelectorAll('input');
+            inputs.forEach(inp => inp.value = '');
+            predictionBox.textContent = '— no prediction yet —';
+            cExport.style.display = 'none';
+        });
+
+        // auto-try load at start
+        tryLoadModel();
+
+    </script>
 </body>
 
 </html>
