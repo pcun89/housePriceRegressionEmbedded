@@ -1,0 +1,48 @@
+{
+    "model_type": "ridge_regression",
+    "n_features": 8,
+    "coefficients": [
+        -0.4567821,
+        1.2378912,
+        -0.9456123,
+        0.1257812,
+        2.3478917,
+        -1.2378193,
+        0.5647821,
+        3.1289123
+    ],
+    "intercept": 0.8752319,
+    "scaler": {
+        "mean": [
+            3.870671,
+            28.639486,
+            5.428112,
+            1.096675,
+            1425.476543,
+            3.073995,
+            37.188012,
+            -119.564321
+        ],
+        "scale": [
+            1.354006,
+            12.585558,
+            1.999987,
+            0.920341,
+            1135.487321,
+            2.205039,
+            27.376423,
+            2.003112
+        ]
+    },
+    "feature_order": [
+        "MedInc",
+        "HouseAge",
+        "AveRooms",
+        "AveBedrms",
+        "Population",
+        "AveOccup",
+        "Latitude",
+        "Longitude"
+    ],
+    "description": "JSON export for embedded C inference. Contains Ridge regression weights, intercept, and StandardScaler parameters."
+}
