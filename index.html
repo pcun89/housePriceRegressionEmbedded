@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>House Price Regression — Embedded Inference Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <header class="site-header">
+        <div class="container">
+            <h1>House Price Regression — Embedded Inference</h1>
+            <p class="tagline">Train a Ridge regression on California Housing and export coefficients to run inference
+                in pure C (microcontroller-friendly).</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Project Snapshot</h2>
+            <ul>
+                <li><strong>Training language:</strong> Python (scikit-learn, pandas, numpy, joblib)</li>
+                <li><strong>Embedded inference:</strong> C (pure float ops)</li>
+                <li><strong>Artifacts created:</strong> <code>reg_pipeline.joblib</code>,
+                    <code>embedded_model.json</code></li>
+            </ul>
+        </section>
+
+        <section class="card two-columns">
+            <div>
+                <h2>How to run (training)</h2>
+                <ol>
+                    <li>Create virtualenv:
+                        <pre class="code"><code>python -m venv venv
+source venv/bin/activate    # macOS / Linux
+venv\Scripts\activate       # Windows</code></pre>
+                    </li>
+                    <li>Install dependencies:
+                        <pre class="code"><code>pip install -r requirements.txt</code></pre>
+                    </li>
+                    <li>Run training:
+                        <pre class="code"><code>python main_regression_embedded.py</code></pre>
+                    </li>
+                </ol>
+                <p>Training script saves both a Python pipeline (<code>reg_pipeline.joblib</code>) and an
+                    embedded-friendly JSON with scale parameters and model coefficients
+                    (<code>embedded_model.json</code>).</p>
+            </div>
+
+            <div>
+                <h2>Download / Local files</h2>
+                <p>Place the generated artifacts in the same directory as this HTML to enable the links below.</p>
+                <ul class="artifact-list">
+                    <li><a href="./reg_pipeline.joblib" download>reg_pipeline.joblib</a> — Python pipeline (scaler +
+                        model)</li>
+                    <li><a href="./embedded_model.json" download>embedded_model.json</a> — coefficients, intercept,
+                        scaler params</li>
+                    <li><a href="./main_regression_embedded.py" download>main_regression_embedded.py</a> — training
+                        script</li>
+                </ul>
+
+                <h3>Quick model summary</h3>
+                <p>This demo uses a <strong>Ridge</strong> regression (linear model with L2 regularization). Because
+                    coefficients are small and fixed-length, embedding them into C is straightforward and efficient for
+                    microcontrollers.</p>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Embedded C inference (snippet)</h2>
+            <p>Drop this C function into your microcontroller code (use <code>float</code> arithmetic). It expects a
+                feature vector scaled the same way as the training scaler — the JSON contains mean &amp; scale params to
+                implement the scaling step.</p>
+            <pre class="code"><code>// embedded_inference.c - minimal float-only inference
+#include &lt;stddef.h&gt;
+
+float predict_house_value(const float features[], size_t n,
+                          const float scaler_mean[], const float scaler_scale[],
+                          const float coef[], float intercept) {
+    // scale features in-place (non-destructive version)
+    float s;
+    float acc = 0.0f;
+    for (size_t i = 0; i &lt; n; ++i) {
+        // standard scaler: (x - mean) / scale
+        float scaled = (features[i] - scaler_mean[i]) / scaler_scale[i];
+        acc += scaled * coef[i];
+    }
+    acc += intercept;
+    return acc; // predicted median house value (same units used in training)
+}
+
+/* Example usage:
+   float features[8] = { /* your 8 features in same order as training * / };
+   float value = predict_house_value(features, 8, mean_arr, scale_arr, coef_arr, intercept);
+*/
+</code></pre>
+            <p class="muted">Note: copy the arrays <code>mean_arr</code>, <code>scale_arr</code>, and
+                <code>coef_arr</code> from <code>embedded_model.json</code> into your C source as
+                <code>const float</code> arrays.</p>
+        </section>
+
+        <section class="card grid-3">
+            <div>
+                <h3>Data Structures</h3>
+                <ul>
+                    <li><strong>Python (training):</strong> <code>numpy.ndarray</code>, <code>pandas.DataFrame</code>,
+                        <code>dict</code> (for JSON export)</li>
+                    <li><strong>Embedded (inference):</strong> C arrays (<code>float[]</code>) for coefficients, means,
+                        scales</li>
+                    <li><strong>On-disk:</strong> joblib file (Python pipeline), JSON file (coeffs + scaler)</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3>Time Complexity</h3>
+                <ul>
+                    <li><strong>Training</strong>: Ridge fitting — typically <em>O(n_features^2 · n_samples)</em> using
+                        dense linear algebra for closed-form / solver-based solution (scikit-learn optimizes this).</li>
+                    <li><strong>Prediction (Python)</strong>: O(n_features) per sample (dot product).</li>
+                    <li><strong>Prediction (C / embedded)</strong>: O(n_features) per inference (simple loop of
+                        multiplies/adds).</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3>Why this is useful</h3>
+                <p>Linear models (Ridge) are compact and deterministic. They export easily to coefficients + intercept
+                    and require only a scaled dot product for inference — ideal when you need low-latency, predictable
+                    inference on tiny devices.</p>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Example: embedded_model.json format</h2>
+            <p>JSON contains arrays you can paste into your C file as <code>const float</code> arrays.</p>
+            <pre class="code"><code>{
+  "feature_names": ["MedInc","HouseAge","AveRooms","AveBedrms","Population","AveOccup","Latitude","Longitude"],
+  "mean": [3.87, 28.6, 5.4, 1.1, 1425.5, 3.0, 35.63, -119.57],
+  "scale": [1.9, 12.6, 2.2, 0.3, 2600.2, 2.3, 2.14, 2.14],
+  "coefficients": [0.67, -0.03, 0.01, -0.02, 0.0001, -0.004, -0.5, 0.4],
+  "intercept": 2.37
+}</code></pre>
+            <p class="muted">(Values above are illustrative — your training run will produce the real numbers.)</p>
+        </section>
+
+        <section class="card">
+            <h2>Tips & gotchas</h2>
+            <ul>
+                <li>Make sure feature ordering in the C arrays matches the training pipeline exactly.</li>
+                <li>If your MCU has limited <code>float</code> precision, test the prediction against Python with a set
+                    of sample inputs.</li>
+                <li>Some devices lack hardware FP; consider using 16.16 fixed-point if needed (requires scaling integers
+                    instead of floats).</li>
+            </ul>
+        </section>
+
+        <footer class="card footer">
+            <p>Want the HTML extended to run a small in-browser scaler + inference using JavaScript? Or a downloadable
+                zip with the artifacts and example feature files? Tell me which and I’ll add it.</p>
+            <p class="small">© House Price Regression — Embedded Inference demo</p>
+        </footer>
+    </main>
+</body>
+
+</html>
