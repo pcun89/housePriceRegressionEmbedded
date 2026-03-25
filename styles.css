@@ -1,10 +1,9 @@
 body {
-    font-family: Arial, sans-serif;
     margin: 0;
+    font-family: Arial;
     background: #f5f7fa;
 }
 
-/* HERO */
 .hero {
     text-align: center;
     padding: 80px 20px;
@@ -13,69 +12,47 @@ body {
 }
 
 .hero button {
-    padding: 12px 20px;
+    padding: 12px;
     margin-top: 20px;
-    background: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
 }
 
-/* INFO */
 .info {
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
     justify-content: center;
-    padding: 40px;
+    gap: 20px;
+    padding: 20px;
 }
 
 .card {
     background: white;
     padding: 20px;
-    border-radius: 12px;
-    width: 250px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* APP */
-.app {
-    max-width: 900px;
-    margin: auto;
-    padding: 40px;
-}
-
-.grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 15px;
-}
-
-.grid input {
-    padding: 10px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-}
-
-/* BUTTONS */
-.buttons {
-    margin-top: 20px;
-}
-
-.buttons button {
-    padding: 10px 15px;
-    margin-right: 10px;
-    border: none;
-    background: #4f46e5;
-    color: white;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-/* RESULT */
-.prediction {
-    margin-top: 20px;
-    padding: 15px;
-    background: white;
     border-radius: 10px;
-    font-size: 18px;
+}
+
+.app {
+    max-width: 800px;
+    margin: auto;
+    padding: 20px;
+}
+
+#sliders div {
+    margin-bottom: 15px;
+}
+
+input[type=range] {
+    width: 100%;
+}
+
+#predictionBox {
+    margin-top: 20px;
+    font-size: 20px;
+}
+
+/* 📱 MOBILE */
+@media (max-width: 600px) {
+    .info {
+        flex-direction: column;
+        align-items: center;
+    }
 }

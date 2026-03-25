@@ -10,120 +10,125 @@
 
 <body>
 
-    <!-- HERO SECTION -->
     <header class="hero">
         <h1>🏠 House Price Predictor</h1>
         <p>Real-time ML predictions powered by Google Cloud Run</p>
         <button onclick="scrollToApp()">Try It Now</button>
     </header>
 
-    <!-- INFO SECTION -->
     <section class="info">
         <div class="card">
             <h2>⚡ Fast API</h2>
-            <p>Deployed using FastAPI on Google Cloud Run</p>
+            <p>Cloud Run</p>
         </div>
         <div class="card">
-            <h2>🧠 Machine Learning</h2>
-            <p>Linear regression with feature scaling</p>
+            <h2>🧠 ML Model</h2>
+            <p>Regression</p>
         </div>
         <div class="card">
             <h2>🌐 Full Stack</h2>
-            <p>Frontend + backend + cloud integration</p>
+            <p>End-to-End</p>
         </div>
     </section>
 
-    <!-- APP -->
     <section id="app" class="app">
-        <h2>Run Prediction</h2>
+        <h2>Adjust Home Features</h2>
 
-        <div id="featureInputs" class="grid"></div>
+        <div id="sliders"></div>
 
-        <div class="buttons">
-            <button id="predictBtn">Predict</button>
-            <button id="exampleBtn">Fill Example</button>
-            <button id="resetBtn">Reset</button>
-        </div>
+        <button id="predictBtn">Predict Price</button>
 
-        <div id="predictionBox" class="prediction">
-            — no prediction yet —
-        </div>
+        <div id="predictionBox">— no prediction yet —</div>
+
+        <canvas id="chart"></canvas>
     </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        const featureNames = [
-            "MedInc", "HouseAge", "AveRooms", "AveBedrms",
-            "Population", "AveOccup", "Latitude", "Longitude"
+        const features = [
+            { name: "MedInc", min: 0, max: 10, step: 0.1, val: 5 },
+            { name: "HouseAge", min: 0, max: 50, step: 1, val: 20 },
+            { name: "AveRooms", min: 1, max: 10, step: 0.1, val: 5 },
+            { name: "AveBedrms", min: 1, max: 5, step: 0.1, val: 2 },
+            { name: "Population", min: 100, max: 5000, step: 50, val: 1500 },
+            { name: "AveOccup", min: 1, max: 5, step: 0.1, val: 3 },
+            { name: "Latitude", min: 30, max: 45, step: 0.1, val: 34 },
+            { name: "Longitude", min: -125, max: -110, step: 0.1, val: -118 }
         ];
 
-        const featureInputsDiv = document.getElementById('featureInputs');
-        const predictionBox = document.getElementById('predictionBox');
+        const slidersDiv = document.getElementById("sliders");
+        let chart;
 
-        function buildInputs() {
-            featureNames.forEach((name, i) => {
-                const div = document.createElement('div');
+        // BUILD SLIDERS
+        features.forEach((f, i) => {
+            const wrapper = document.createElement("div");
 
-                const label = document.createElement('label');
-                label.textContent = name;
+            const label = document.createElement("label");
+            label.innerHTML = `${f.name}: <span id="val${i}">${f.val}</span>`;
 
-                const input = document.createElement('input');
-                input.type = "number";
-                input.step = "any";
+            const input = document.createElement("input");
+            input.type = "range";
+            input.min = f.min;
+            input.max = f.max;
+            input.step = f.step;
+            input.value = f.val;
 
-                div.appendChild(label);
-                div.appendChild(input);
-                featureInputsDiv.appendChild(div);
-            });
-        }
+            input.oninput = () => {
+                document.getElementById(`val${i}`).textContent = input.value;
+            };
 
-        function readValues() {
-            const inputs = document.querySelectorAll("#featureInputs input");
-            return Array.from(inputs).map(i => Number(i.value));
-        }
+            wrapper.appendChild(label);
+            wrapper.appendChild(input);
+            slidersDiv.appendChild(wrapper);
+        });
 
+        // PREDICT
         async function doPredict() {
-            try {
-                const values = readValues();
+            const values = Array.from(document.querySelectorAll("input[type=range]"))
+                .map(i => Number(i.value));
 
-                const res = await fetch(
-                    "https://house-api-816554231079.us-central1.run.app/predict",
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ values })
-                    }
-                );
+            const res = await fetch(
+                "https://house-api-816554231079.us-central1.run.app/predict",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ values })
+                }
+            );
 
-                const data = await res.json();
-                const price = data.prediction * 100000;
+            const data = await res.json();
+            const price = data.prediction * 100000;
 
-                predictionBox.textContent =
-                    `Estimated Price: $${price.toLocaleString()}`;
+            document.getElementById("predictionBox").textContent =
+                `Estimated Price: $${price.toLocaleString()}`;
 
-            } catch (e) {
-                predictionBox.textContent = "Error: " + e.message;
-            }
+            updateChart(price);
         }
 
         document.getElementById("predictBtn").onclick = doPredict;
 
-        document.getElementById("exampleBtn").onclick = () => {
-            const example = [8, 20, 6, 1, 3000, 3, 34, -118];
-            document.querySelectorAll("#featureInputs input")
-                .forEach((inp, i) => inp.value = example[i]);
-        };
+        // CHART
+        function updateChart(price) {
+            const ctx = document.getElementById("chart");
 
-        document.getElementById("resetBtn").onclick = () => {
-            document.querySelectorAll("#featureInputs input")
-                .forEach(inp => inp.value = "");
-            predictionBox.textContent = "— no prediction yet —";
-        };
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: ["Predicted Price"],
+                    datasets: [{
+                        label: "USD",
+                        data: [price]
+                    }]
+                }
+            });
+        }
 
         function scrollToApp() {
             document.getElementById("app").scrollIntoView({ behavior: "smooth" });
         }
-
-        buildInputs();
     </script>
 
 </body>
